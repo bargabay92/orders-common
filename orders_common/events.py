@@ -5,7 +5,9 @@ from enum import Enum
 from typing import Any, Dict
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, validator
+import json
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 
 def to_camel(name: str) -> str:
@@ -26,22 +28,25 @@ class OrderEvent(BaseModel):
     source: str
     payload: Dict[str, Any] = {}
 
-    @validator("occurred_at")
+    @field_validator("occurred_at")
+    @classmethod
     def must_be_aware(cls, v):
         if v.tzinfo is None:
             raise ValueError("occurred_at must include a timezone")
         return v
 
-    class Config:
-        alias_generator = to_camel
-        allow_population_by_field_name = True
-        use_enum_values = True
-        json_encoders = {Decimal: str, datetime: lambda d: d.isoformat()}
+    # v1 used json_encoders. v2 already writes Decimal as a string in JSON; datetimes keep v1's
+    # isoformat() ("+00:00", where v2 would write "Z").
+    @field_serializer("occurred_at", when_used="json")
+    def _occurred_at_iso(self, v: datetime) -> str:
+        return v.isoformat()
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, use_enum_values=True)
 
     def to_message(self) -> bytes:
-        """camelCase JSON, as consumers expect."""
-        return self.json(by_alias=True).encode()
+        """camelCase JSON, as consumers expect (same bytes as v1's .json(): json.dumps spacing)."""
+        return json.dumps(self.model_dump(mode="json", by_alias=True)).encode()
 
 
 def parse_event(raw: bytes) -> OrderEvent:
-    return OrderEvent.parse_raw(raw)
+    return OrderEvent.model_validate_json(raw)
