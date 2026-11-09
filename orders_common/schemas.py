@@ -1,7 +1,7 @@
 """Base schemas shared by services."""
 from typing import Generic, List, Optional, TypeVar
 
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import BaseModel, Field, conint, root_validator, validator
 from pydantic.generics import GenericModel
 
 from orders_common.types import CountryCode
@@ -43,6 +43,6 @@ class Page(GenericModel, Generic[T]):
     """One page of results: `Page[ProductOut]`."""
 
     items: List[T]
-    total: int = Field(..., ge=0)
-    offset: int = Field(0, ge=0)
-    limit: int = Field(50, ge=1, le=500)
+    total: conint(ge=0)
+    offset: conint(ge=0) = 0
+    limit: conint(ge=1, le=500) = 50
